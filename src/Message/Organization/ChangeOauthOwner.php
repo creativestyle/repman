@@ -7,7 +7,7 @@ namespace Buddy\Repman\Message\Organization;
 use Buddy\Repman\Entity\Organization\Member;
 use Buddy\Repman\Entity\User;
 
-final class ChangeOAuthOwner
+final class ChangeOauthOwner
 {
     private string $organizationId;
     private string $userId;
