@@ -8,11 +8,11 @@ use Buddy\Repman\Form\Type\Organization\ChangeAliasType;
 use Buddy\Repman\Form\Type\Organization\ChangeAnonymousAccessType;
 use Buddy\Repman\Form\Type\Organization\ChangeNameType;
 use Buddy\Repman\Form\Type\Organization\GenerateTokenType;
-use Buddy\Repman\Form\Type\Organization\SetOAuthOwnerType;
+use Buddy\Repman\Form\Type\Organization\SetOauthOwnerType;
 use Buddy\Repman\Message\Organization\ChangeAlias;
 use Buddy\Repman\Message\Organization\ChangeAnonymousAccess;
 use Buddy\Repman\Message\Organization\ChangeName;
-use Buddy\Repman\Message\Organization\ChangeOAuthOwner;
+use Buddy\Repman\Message\Organization\ChangeOauthOwner;
 use Buddy\Repman\Message\Organization\GenerateToken;
 use Buddy\Repman\Message\Organization\Package\AddBitbucketHook;
 use Buddy\Repman\Message\Organization\Package\AddGitHubHook;
@@ -276,7 +276,7 @@ final class OrganizationController extends AbstractController
             return $this->redirectToRoute('organization_settings', ['organization' => $organization->alias()]);
         }
 
-        $oauthOwnerForm = $this->createForm(SetOAuthOwnerType::class,['oauth_owner' => $organization->oauthOwner()]);
+        $oauthOwnerForm = $this->createForm(SetOauthOwnerType::class,['oauth_owner' => $organization->oauthOwner()]);
         $members = $this->organizationQuery->findAllMembers($organization->id(), new Filter());
 
         $choices = ['' => ''];
@@ -290,7 +290,7 @@ final class OrganizationController extends AbstractController
         $oauthOwnerForm->handleRequest($request);
 
         if ($oauthOwnerForm->isSubmitted() && $oauthOwnerForm->isValid()) {
-            $this->messageBus->dispatch(new ChangeOAuthOwner($organization->id(), (string)$oauthOwnerForm->get('oauth_owner')->getData()));
+            $this->messageBus->dispatch(new ChangeOauthOwner($organization->id(), (string)$oauthOwnerForm->get('oauth_owner')->getData()));
 
             $this->addFlash('success', 'OAuth owner has been successfully changed.');
 
