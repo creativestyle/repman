@@ -80,6 +80,7 @@ final class Config
 
     public function invalidate(): void
     {
+        $this->values = [];
         $this->cache->delete(self::CACHE_KEY);
     }
 

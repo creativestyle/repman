@@ -86,6 +86,27 @@ final class BuddyControllerTest extends FunctionalTestCase
         self::assertStringContainsString('test@buddy.works', $this->lastResponseBody());
     }
 
+    public function testLoginWithBuddyCreatesUserWhenLocalRegistrationIsDisabled(): void
+    {
+        $this->fixtures->changeConfig('local_authentication', 'login_only');
+        $this->fixtures->changeConfig('oauth_registration', 'enabled');
+
+        $email = 'oauth-buddy@example.com';
+        $this->client->request('GET', $this->urlTo('auth_buddy_start'));
+        $params = $this->getQueryParamsFromLastResponse();
+        self::assertStringEndsWith('/auth/buddy/check', (string) ($params['redirect_uri'] ?? ''));
+
+        $this->client->disableReboot();
+        BuddyOAuth::mockAccessTokenResponse($email, $this->container());
+
+        $this->client->request('GET', $this->urlTo('login_buddy_check', ['state' => $params['state'], 'code' => 'secret-token']));
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('organization_create', ['origin' => 'buddy'])));
+        $this->client->followRedirect();
+        self::assertStringContainsString('Your account has been created', $this->lastResponseBody());
+        self::assertStringContainsString($email, $this->lastResponseBody());
+    }
+
     public function testDisplayErrorIfSomethingGoesWrongDuringRegister(): void
     {
         $this->client->request('GET', $this->urlTo('register_buddy_start'));

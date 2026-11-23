@@ -46,10 +46,15 @@ final class GitLabController extends OAuthController
         return $this->createAndAuthenticateUser(
             'gitlab',
             function (): string {
+                $client = $this->oauth->getClient('gitlab');
+                $token = $client->getAccessToken([
+                    'redirect_uri' => $this->generateUrl('register_gitlab_check', [], UrlGeneratorInterface::ABSOLUTE_URL),
+                ]);
                 /** @var GitlabResourceOwner $user */
-                $user = $this->oauth->getClient('gitlab')->fetchUser();
+                $user = $client->fetchUserFromToken($token);
+                $userData = $user->toArray();
 
-                return $user->getEmail();
+                return isset($userData['email']) && \is_string($userData['email']) ? $userData['email'] : '';
             },
             $request
         );

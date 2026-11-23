@@ -20,6 +20,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
 
 abstract class OAuthController extends AbstractController
 {
@@ -50,25 +51,45 @@ abstract class OAuthController extends AbstractController
         }
 
         try {
-            $email = $emailProvider();
-            $params = [];
-            if (!$this->guard->userExists($email)) {
-                $this->messageBus->dispatch(new CreateOAuthUser($email));
-                $this->addFlash('success', 'Your account has been created. Please create a new organization.');
-                $params['origin'] = $type;
-            } else {
-                $this->addFlash('success', 'Your account already exists. You have been logged in automatically');
-            }
-            $this->guard->authenticateUser($email, $request);
-
-            return $this->redirectToRoute('organization_create', $params);
+            $email = trim($emailProvider());
         } catch (OAuth2ClientException $exception) {
             $this->addFlash('danger', 'Authentication failed! Did you authorize our app?');
-        } catch (IdentityProviderException|HttpException $e) {
+
+            return $this->redirectToRoute('app_register');
+        } catch (IdentityProviderException|HttpException|\RuntimeException $e) {
             $this->addFlash('danger', $e->getMessage());
+
+            return $this->redirectToRoute('app_register');
         }
 
-        return $this->redirectToRoute('app_register');
+        if ($email === '') {
+            $this->addFlash('danger', 'Primary e-mail not found.');
+
+            return $this->redirectToRoute('app_register');
+        }
+
+        $isNewUser = !$this->guard->userExists($email);
+        if ($isNewUser) {
+            $this->messageBus->dispatch(new CreateOAuthUser($email));
+        }
+
+        try {
+            $this->guard->authenticateUser($email, $request);
+        } catch (AuthenticationException $exception) {
+            $this->addFlash('danger', strtr($exception->getMessageKey(), $exception->getMessageData()));
+
+            return $this->redirectToRoute('app_register');
+        }
+
+        if ($isNewUser) {
+            $this->addFlash('success', 'Your account has been created. Please create a new organization.');
+
+            return $this->redirectToRoute('organization_create', ['origin' => $type]);
+        }
+
+        $this->addFlash('success', 'Your account already exists. You have been logged in automatically');
+
+        return $this->redirectToRoute('organization_create');
     }
 
     protected function storeRepoToken(Request $request, string $type, callable $tokenProvider, string $route): Response

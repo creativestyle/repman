@@ -82,6 +82,26 @@ final class GitLabControllerTest extends FunctionalTestCase
         self::assertStringContainsString('test@buddy.works', $this->lastResponseBody());
     }
 
+    public function testLoginWithGitLabCreatesUserWhenLocalAuthenticationIsDisabled(): void
+    {
+        $this->fixtures->changeConfig('local_authentication', 'disabled');
+        $this->fixtures->changeConfig('oauth_registration', 'enabled');
+
+        $email = 'oauth-gitlab@example.com';
+        $this->client->request('GET', $this->urlTo('auth_gitlab_start'));
+        $params = $this->getQueryParamsFromLastResponse();
+        self::assertStringEndsWith('/auth/gitlab/check', (string) ($params['redirect_uri'] ?? ''));
+
+        $this->mockTokenAndUserResponse($email);
+
+        $this->client->request('GET', $this->urlTo('login_gitlab_check', ['state' => $params['state'], 'code' => 'secret-token']));
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('organization_create', ['origin' => 'gitlab'])));
+        $this->client->followRedirect();
+        self::assertStringContainsString('Your account has been created', $this->lastResponseBody());
+        self::assertStringContainsString($email, $this->lastResponseBody());
+    }
+
     public function testDisplayErrorIfSomethingGoesWrongDuringRegister(): void
     {
         $this->client->request('GET', $this->urlTo('register_gitlab_start'));

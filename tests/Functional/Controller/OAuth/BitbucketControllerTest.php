@@ -88,6 +88,27 @@ final class BitbucketControllerTest extends FunctionalTestCase
         self::assertStringContainsString('test@buddy.works', $this->lastResponseBody());
     }
 
+    public function testLoginWithBitbucketCreatesUserWhenLocalRegistrationIsDisabled(): void
+    {
+        $this->fixtures->changeConfig('local_authentication', 'login_only');
+        $this->fixtures->changeConfig('oauth_registration', 'enabled');
+
+        $email = 'oauth-bitbucket@example.com';
+        $this->client->request('GET', $this->urlTo('auth_bitbucket_start'));
+        $params = $this->getQueryParamsFromLastResponse();
+        self::assertStringEndsWith('/auth/bitbucket/check', (string) ($params['redirect_uri'] ?? ''));
+
+        $this->client->disableReboot();
+        BitbucketOAuth::mockAccessTokenResponse($email, $this->container());
+
+        $this->client->request('GET', $this->urlTo('login_bitbucket_check', ['state' => $params['state'], 'code' => 'secret-token']));
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('organization_create', ['origin' => 'bitbucket'])));
+        $this->client->followRedirect();
+        self::assertStringContainsString('Your account has been created', $this->lastResponseBody());
+        self::assertStringContainsString($email, $this->lastResponseBody());
+    }
+
     public function testDisplayErrorIfSomethingGoesWrongDuringRegister(): void
     {
         $this->client->request('GET', $this->urlTo('register_bitbucket_start'));

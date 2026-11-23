@@ -4,25 +4,31 @@ declare(strict_types=1);
 
 namespace Buddy\Repman\Security;
 
+use Buddy\Repman\Service\Config;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use KnpU\OAuth2ClientBundle\Security\Exception\IdentityProviderAuthenticationException;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 use Omines\OAuth2\Client\Provider\GitlabResourceOwner;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
-use Symfony\Component\Security\Core\User\UserInterface;
-use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\PassportInterface;
-use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 
 final class GitLabAuthenticator extends OAuthAuthenticator
 {
-    public function __construct(ClientRegistry $clientRegistry, RouterInterface $router, UserProvider $userProvider)
-    {
+    public function __construct(
+        ClientRegistry $clientRegistry,
+        RouterInterface $router,
+        UserProvider $userProvider,
+        Config $config,
+        MessageBusInterface $messageBus
+    ) {
         $this->clientRegistry = $clientRegistry;
         $this->userProvider = $userProvider;
         $this->router = $router;
+        $this->config = $config;
+        $this->messageBus = $messageBus;
     }
 
     public function supports(Request $request): bool
@@ -32,20 +38,26 @@ final class GitLabAuthenticator extends OAuthAuthenticator
 
     public function authenticate(Request $request): PassportInterface
     {
+        $client = $this->clientRegistry->getClient('gitlab');
+
         try {
             /** @var GitlabResourceOwner $gitLabUser */
-            $gitLabUser = $this->clientRegistry->getClient('gitlab')->fetchUserFromToken($this->fetchAccessToken(
-                $this->clientRegistry->getClient('gitlab'),
+            $gitLabUser = $client->fetchUserFromToken($this->fetchAccessToken(
+                $client,
                 $request->attributes->get('_route')
             ));
         } catch (IdentityProviderException|IdentityProviderAuthenticationException $exception) {
             throw new CustomUserMessageAuthenticationException($exception->getMessage());
         }
 
-        $user = $this->userProvider->loadUserByIdentifier($gitLabUser->getEmail());
+        $userData = $gitLabUser->toArray();
+        $email = isset($userData['email']) && \is_string($userData['email']) ? $userData['email'] : '';
 
-        return new SelfValidatingPassport(new UserBadge($gitLabUser->getEmail(), function () use ($user): UserInterface {
-            return $user;
-        }));
+        return $this->createPassport($email, $request);
+    }
+
+    protected function providerName(): string
+    {
+        return 'gitlab';
     }
 }

@@ -93,6 +93,8 @@
 {% else %}
     <div class="ml-auto">
         <a href="{{ url('app_login') }}" class="btn btn-secondary">Login</a>
-        <a href="{{ url('app_register') }}" class="btn btn-info">Register</a>
+        {% if config.userRegistrationEnabled %}
+            <a href="{{ url('app_register') }}" class="btn btn-info">Register</a>
+        {% endif %}
     </div>
 {% endif %}
