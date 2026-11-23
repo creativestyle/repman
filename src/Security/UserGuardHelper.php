@@ -15,12 +15,18 @@ final class UserGuardHelper
     private UserProvider $userProvider;
     private LoginFormAuthenticator $authenticator;
     private TokenStorageInterface $tokenStorage;
+    private UserChecker $userChecker;
 
-    public function __construct(UserProvider $userProvider, LoginFormAuthenticator $authenticator, TokenStorageInterface $tokenStorage)
-    {
+    public function __construct(
+        UserProvider $userProvider,
+        LoginFormAuthenticator $authenticator,
+        TokenStorageInterface $tokenStorage,
+        UserChecker $userChecker
+    ) {
         $this->userProvider = $userProvider;
         $this->authenticator = $authenticator;
         $this->tokenStorage = $tokenStorage;
+        $this->userChecker = $userChecker;
     }
 
     public function userExists(string $email): bool
@@ -30,8 +36,12 @@ final class UserGuardHelper
 
     public function authenticateUser(string $email, Request $request): void
     {
-        $token = $this->authenticator->createToken(new SelfValidatingPassport(new UserBadge($email, function (string $email): UserInterface {
-            return $this->userProvider->loadUserByIdentifier($email);
+        $user = $this->userProvider->loadUserByIdentifier($email);
+        $this->userChecker->checkPreAuth($user);
+        $this->userChecker->checkPostAuth($user);
+
+        $token = $this->authenticator->createToken(new SelfValidatingPassport(new UserBadge($email, static function () use ($user): UserInterface {
+            return $user;
         })), 'main');
         $this->tokenStorage->setToken($token);
         $request->getSession()->set('_security_main', serialize($token));

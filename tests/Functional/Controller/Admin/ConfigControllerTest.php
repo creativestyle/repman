@@ -102,6 +102,44 @@ final class ConfigControllerTest extends FunctionalTestCase
         );
     }
 
+    public function testRegisterPageAndOAuthStartRoutesStayAvailableWhenLocalRegistrationIsDisabled(): void
+    {
+        $this->client->request('GET', $this->urlTo('admin_config'));
+        $this->client->submitForm('save', [
+            'local_authentication' => 'login_only',
+            'oauth_registration' => 'enabled',
+        ]);
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('admin_config')));
+
+        $this->client->request('GET', $this->urlTo('app_register'));
+        self::assertEquals(Response::HTTP_OK, $this->client->getResponse()->getStatusCode());
+        self::assertStringNotContainsString('or sign up with e-mail', $this->lastResponseBody());
+
+        $this->client->request('GET', $this->urlTo('register_github_start'));
+        self::assertTrue($this->client->getResponse()->isRedirection());
+
+        $this->client->request('GET', $this->urlTo('register_gitlab_start'));
+        self::assertTrue($this->client->getResponse()->isRedirection());
+
+        $this->client->request('GET', $this->urlTo('register_bitbucket_start'));
+        self::assertTrue($this->client->getResponse()->isRedirection());
+
+        $this->client->request('GET', $this->urlTo('register_buddy_start'));
+        self::assertTrue($this->client->getResponse()->isRedirection());
+
+        $this->client->request('GET', $this->urlTo('admin_config'));
+        $this->client->submitForm('save', [
+            'local_authentication' => 'disabled',
+            'oauth_registration' => 'enabled',
+        ]);
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('admin_config')));
+
+        $this->client->request('GET', $this->urlTo('app_register'));
+        self::assertEquals(Response::HTTP_OK, $this->client->getResponse()->getStatusCode());
+    }
+
     public function testEnableTelemetry(): void
     {
         $prompt = 'Help us improve <strong>Repman</strong> by enabling sending anonymous usage statistic';

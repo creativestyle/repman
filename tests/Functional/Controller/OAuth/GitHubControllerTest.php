@@ -86,6 +86,67 @@ final class GitHubControllerTest extends FunctionalTestCase
         self::assertStringContainsString('test@buddy.works', $this->lastResponseBody());
     }
 
+    public function testLoginWithGitHubCreatesUserWhenLocalRegistrationIsDisabled(): void
+    {
+        $this->fixtures->changeConfig('local_authentication', 'login_only');
+        $this->fixtures->changeConfig('oauth_registration', 'enabled');
+
+        $email = 'oauth-login@example.com';
+        $this->client->request('GET', $this->urlTo('auth_github_start'));
+        $params = $this->getQueryParamsFromLastResponse();
+        self::assertStringEndsWith('/auth/github/check', (string) ($params['redirect_uri'] ?? ''));
+
+        $this->client->disableReboot();
+        GitHubOAuth::mockTokenResponse($email, $this->container());
+
+        $this->client->request('GET', $this->urlTo('login_github_check', ['state' => $params['state'], 'code' => 'secret-token']));
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('organization_create', ['origin' => 'github'])));
+        $this->client->followRedirect();
+        self::assertStringContainsString('Your account has been created', $this->lastResponseBody());
+        self::assertStringContainsString($email, $this->lastResponseBody());
+    }
+
+    public function testRegisterWithGitHubCreatesUserWhenLocalRegistrationIsDisabled(): void
+    {
+        $this->fixtures->changeConfig('local_authentication', 'login_only');
+        $this->fixtures->changeConfig('oauth_registration', 'enabled');
+
+        $email = 'oauth-register@example.com';
+        $this->client->request('GET', $this->urlTo('register_github_start'));
+        $params = $this->getQueryParamsFromLastResponse();
+        self::assertStringEndsWith('/register/github/check', (string) ($params['redirect_uri'] ?? ''));
+
+        $this->client->disableReboot();
+        GitHubOAuth::mockTokenResponse($email, $this->container());
+
+        $this->client->request('GET', $this->urlTo('register_github_check', ['state' => $params['state'], 'code' => 'secret-token']));
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('organization_create', ['origin' => 'github'])));
+        $this->client->followRedirect();
+        self::assertStringContainsString('Your account has been created', $this->lastResponseBody());
+        self::assertStringContainsString($email, $this->lastResponseBody());
+    }
+
+    public function testDisabledUserCannotLoginViaRegisterRoute(): void
+    {
+        $userId = $this->fixtures->createUser($email = 'disabled@example.com');
+        $this->fixtures->disableUser($userId);
+
+        $this->client->request('GET', $this->urlTo('register_github_start'));
+        $params = $this->getQueryParamsFromLastResponse();
+
+        $this->client->disableReboot();
+        GitHubOAuth::mockTokenResponse($email, $this->container());
+
+        $this->client->request('GET', $this->urlTo('register_github_check', ['state' => $params['state'], 'code' => 'secret-token']));
+
+        self::assertTrue($this->client->getResponse()->isRedirect($this->urlTo('app_register')));
+        $this->client->followRedirect();
+        self::assertStringContainsString('Account is disabled.', $this->lastResponseBody());
+        self::assertStringNotContainsString('Your account already exists', $this->lastResponseBody());
+    }
+
     public function testRedirectToRequestedPathOnSuccessfulLoginWithGitHub(): void
     {
         $this->fixtures->createOAuthUser($email = 'test@buddy.works');
